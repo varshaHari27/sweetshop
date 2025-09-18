@@ -41,8 +41,6 @@ def login(user: schemas.UserCreate, db: Session = Depends(get_db)):
 
 
 # ---------------- Sweets ----------------
-
-# ✅ Search sweets (must be BEFORE /{sweet_id})
 @app.get("/api/sweets/search", response_model=List[schemas.SweetResponse])
 def search_sweets(
     name: Optional[str] = None,
@@ -65,7 +63,7 @@ def search_sweets(
 
 @app.post("/api/sweets", response_model=schemas.SweetResponse)
 def create_sweet(sweet: schemas.SweetCreate, db: Session = Depends(get_db)):
-    new_sweet = models.Sweet(**sweet.dict())
+    new_sweet = models.Sweet(**sweet.model_dump())
     db.add(new_sweet)
     db.commit()
     db.refresh(new_sweet)
@@ -90,7 +88,7 @@ def update_sweet(sweet_id: int, sweet: schemas.SweetCreate, db: Session = Depend
     db_sweet = db.query(models.Sweet).filter(models.Sweet.id == sweet_id).first()
     if not db_sweet:
         raise HTTPException(status_code=404, detail="Sweet not found")
-    for key, value in sweet.dict().items():
+    for key, value in sweet.model_dump().items():
         setattr(db_sweet, key, value)
     db.commit()
     db.refresh(db_sweet)
