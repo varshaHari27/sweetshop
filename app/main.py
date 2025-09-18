@@ -7,7 +7,6 @@ models.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI(title="Sweet Shop API", version="0.1.0")
 
-# Dependency to get DB session
 get_db = database.get_db
 
 # ------------------ Root ------------------ #
@@ -15,7 +14,7 @@ get_db = database.get_db
 def read_root():
     return {"message": "Welcome to Sweet Shop API"}
 
-# ------------------ Auth Endpoints ------------------ #
+# ------------------ Auth ------------------ #
 @app.post("/api/auth/register", response_model=schemas.UserResponse, status_code=201)
 def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(models.User.username == user.username).first()
@@ -36,7 +35,7 @@ def login(user: schemas.UserCreate, db: Session = Depends(get_db)):
     access_token = auth.create_access_token({"sub": db_user.username})
     return {"access_token": access_token, "token_type": "bearer"}
 
-# ------------------ Sweet Endpoints ------------------ #
+# ------------------ Sweet CRUD ------------------ #
 @app.post("/api/sweets", response_model=schemas.SweetResponse, status_code=201)
 def add_sweet(sweet: schemas.SweetCreate, db: Session = Depends(get_db)):
     return crud.create_sweet(db, sweet)
@@ -56,15 +55,25 @@ def get_sweet(sweet_id: int, db: Session = Depends(get_db)):
 def update_sweet(sweet_id: int, sweet: schemas.SweetCreate, db: Session = Depends(get_db)):
     return crud.update_sweet(db, sweet_id, sweet)
 
+# ------------------ Admin-protected endpoints ------------------ #
 @app.delete("/api/sweets/{sweet_id}")
-def delete_sweet(sweet_id: int, db: Session = Depends(get_db)):
+def delete_sweet(sweet_id: int, 
+                 db: Session = Depends(get_db), 
+                 current_user: models.User = Depends(auth.get_current_user)):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Not authorized")
     return crud.delete_sweet(db, sweet_id)
 
-# ------------------ Inventory Operations ------------------ #
+@app.post("/api/sweets/{sweet_id}/restock", response_model=schemas.SweetResponse)
+def restock_sweet(sweet_id: int, 
+                  quantity: int = 1, 
+                  db: Session = Depends(get_db),
+                  current_user: models.User = Depends(auth.get_current_user)):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    return crud.restock_sweet(db, sweet_id, quantity)
+
+# ------------------ Purchase ------------------ #
 @app.post("/api/sweets/{sweet_id}/purchase", response_model=schemas.SweetResponse)
 def purchase_sweet(sweet_id: int, quantity: int = 1, db: Session = Depends(get_db)):
     return crud.purchase_sweet(db, sweet_id, quantity)
-
-@app.post("/api/sweets/{sweet_id}/restock", response_model=schemas.SweetResponse)
-def restock_sweet(sweet_id: int, quantity: int = 1, db: Session = Depends(get_db)):
-    return crud.restock_sweet(db, sweet_id, quantity)
