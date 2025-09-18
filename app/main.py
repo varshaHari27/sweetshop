@@ -1,90 +1,132 @@
-from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi import FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from . import models, schemas, database, auth, crud
+from typing import List, Optional
+
+from . import models, schemas, auth
+from .database import engine, Base, get_db
 
 # Create database tables
-models.Base.metadata.create_all(bind=database.engine)
+Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Sweet Shop API", version="0.1.0")
+app = FastAPI(title="Sweet Shop Management System")
 
-get_db = database.get_db
 
-# ------------------ Root ------------------ #
+# ---------------- Root ----------------
 @app.get("/")
-def read_root():
-    return {"message": "Welcome to Sweet Shop API"}
+def root():
+    return {"message": "Welcome to the Sweet Shop API!"}
 
-# ------------------ Auth ------------------ #
-@app.post("/api/auth/register", response_model=schemas.UserResponse, status_code=201)
-def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
+
+# ---------------- User Auth ----------------
+@app.post("/api/auth/register", response_model=schemas.UserResponse)
+def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(models.User.username == user.username).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Username already registered")
-    hashed_password = auth.get_password_hash(user.password)
-    new_user = models.User(username=user.username, hashed_password=hashed_password)
+    hashed_pw = auth.get_password_hash(user.password)
+    new_user = models.User(username=user.username, hashed_password=hashed_pw)
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
     return new_user
+
 
 @app.post("/api/auth/login", response_model=schemas.Token)
 def login(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(models.User.username == user.username).first()
     if not db_user or not auth.verify_password(user.password, db_user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    access_token = auth.create_access_token({"sub": db_user.username})
+    access_token = auth.create_access_token(data={"sub": db_user.username})
     return {"access_token": access_token, "token_type": "bearer"}
 
-# ------------------ Sweet CRUD ------------------ #
-@app.post("/api/sweets", response_model=schemas.SweetResponse, status_code=201)
-def add_sweet(sweet: schemas.SweetCreate, db: Session = Depends(get_db)):
-    return crud.create_sweet(db, sweet)
 
-@app.get("/api/sweets", response_model=list[schemas.SweetResponse])
+# ---------------- Sweets ----------------
+
+# ✅ Search sweets (must be BEFORE /{sweet_id})
+@app.get("/api/sweets/search", response_model=List[schemas.SweetResponse])
+def search_sweets(
+    name: Optional[str] = None,
+    category: Optional[str] = None,
+    min_price: Optional[int] = None,
+    max_price: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    query = db.query(models.Sweet)
+    if name:
+        query = query.filter(models.Sweet.name.ilike(f"%{name}%"))
+    if category:
+        query = query.filter(models.Sweet.category.ilike(f"%{category}%"))
+    if min_price is not None:
+        query = query.filter(models.Sweet.price >= min_price)
+    if max_price is not None:
+        query = query.filter(models.Sweet.price <= max_price)
+    return query.all()
+
+
+@app.post("/api/sweets", response_model=schemas.SweetResponse)
+def create_sweet(sweet: schemas.SweetCreate, db: Session = Depends(get_db)):
+    new_sweet = models.Sweet(**sweet.dict())
+    db.add(new_sweet)
+    db.commit()
+    db.refresh(new_sweet)
+    return new_sweet
+
+
+@app.get("/api/sweets", response_model=List[schemas.SweetResponse])
 def list_sweets(db: Session = Depends(get_db)):
-    return crud.get_sweets(db)
+    return db.query(models.Sweet).all()
+
 
 @app.get("/api/sweets/{sweet_id}", response_model=schemas.SweetResponse)
 def get_sweet(sweet_id: int, db: Session = Depends(get_db)):
-    db_sweet = crud.get_sweet_by_id(db, sweet_id)
-    if not db_sweet:
+    sweet = db.query(models.Sweet).filter(models.Sweet.id == sweet_id).first()
+    if not sweet:
         raise HTTPException(status_code=404, detail="Sweet not found")
-    return db_sweet
+    return sweet
+
 
 @app.put("/api/sweets/{sweet_id}", response_model=schemas.SweetResponse)
 def update_sweet(sweet_id: int, sweet: schemas.SweetCreate, db: Session = Depends(get_db)):
-    return crud.update_sweet(db, sweet_id, sweet)
+    db_sweet = db.query(models.Sweet).filter(models.Sweet.id == sweet_id).first()
+    if not db_sweet:
+        raise HTTPException(status_code=404, detail="Sweet not found")
+    for key, value in sweet.dict().items():
+        setattr(db_sweet, key, value)
+    db.commit()
+    db.refresh(db_sweet)
+    return db_sweet
 
-# ------------------ Admin-protected endpoints ------------------ #
+
 @app.delete("/api/sweets/{sweet_id}")
-def delete_sweet(sweet_id: int, 
-                 db: Session = Depends(get_db), 
-                 current_user: models.User = Depends(auth.get_current_user)):
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    return crud.delete_sweet(db, sweet_id)
+def delete_sweet(sweet_id: int, db: Session = Depends(get_db)):
+    sweet = db.query(models.Sweet).filter(models.Sweet.id == sweet_id).first()
+    if not sweet:
+        raise HTTPException(status_code=404, detail="Sweet not found")
+    db.delete(sweet)
+    db.commit()
+    return {"message": "Sweet deleted successfully"}
 
-@app.post("/api/sweets/{sweet_id}/restock", response_model=schemas.SweetResponse)
-def restock_sweet(sweet_id: int, 
-                  quantity: int = 1, 
-                  db: Session = Depends(get_db),
-                  current_user: models.User = Depends(auth.get_current_user)):
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    return crud.restock_sweet(db, sweet_id, quantity)
 
-# ------------------ Purchase ------------------ #
-@app.post("/api/sweets/{sweet_id}/purchase", response_model=schemas.SweetResponse)
-def purchase_sweet(sweet_id: int, quantity: int = 1, db: Session = Depends(get_db)):
-    return crud.purchase_sweet(db, sweet_id, quantity)
+# ---------------- Inventory ----------------
+@app.post("/api/sweets/{sweet_id}/purchase")
+def purchase_sweet(sweet_id: int, db: Session = Depends(get_db)):
+    sweet = db.query(models.Sweet).filter(models.Sweet.id == sweet_id).first()
+    if not sweet:
+        raise HTTPException(status_code=404, detail="Sweet not found")
+    if sweet.quantity <= 0:
+        raise HTTPException(status_code=400, detail="Out of stock")
+    sweet.quantity -= 1
+    db.commit()
+    db.refresh(sweet)
+    return {"message": f"Purchased {sweet.name}. Remaining stock: {sweet.quantity}"}
 
-# ------------------ Search ------------------ #
-@app.get("/api/sweets/search", response_model=list[schemas.SweetResponse])
-def search_sweets_endpoint(
-    name: str = Query(None, description="Name of the sweet"),
-    category: str = Query(None, description="Category of the sweet"),
-    min_price: int = Query(None, ge=0, description="Minimum price"),
-    max_price: int = Query(None, ge=0, description="Maximum price"),
-    db: Session = Depends(get_db)
-):
-    return crud.search_sweets(db, name, category, min_price, max_price)
+
+@app.post("/api/sweets/{sweet_id}/restock")
+def restock_sweet(sweet_id: int, amount: int = 10, db: Session = Depends(get_db)):
+    sweet = db.query(models.Sweet).filter(models.Sweet.id == sweet_id).first()
+    if not sweet:
+        raise HTTPException(status_code=404, detail="Sweet not found")
+    sweet.quantity += amount
+    db.commit()
+    db.refresh(sweet)
+    return {"message": f"Restocked {sweet.name}. New stock: {sweet.quantity}"}
