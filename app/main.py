@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from . import models, schemas, database, auth, crud
 
@@ -77,3 +77,14 @@ def restock_sweet(sweet_id: int,
 @app.post("/api/sweets/{sweet_id}/purchase", response_model=schemas.SweetResponse)
 def purchase_sweet(sweet_id: int, quantity: int = 1, db: Session = Depends(get_db)):
     return crud.purchase_sweet(db, sweet_id, quantity)
+
+# ------------------ Search ------------------ #
+@app.get("/api/sweets/search", response_model=list[schemas.SweetResponse])
+def search_sweets_endpoint(
+    name: str = Query(None, description="Name of the sweet"),
+    category: str = Query(None, description="Category of the sweet"),
+    min_price: int = Query(None, ge=0, description="Minimum price"),
+    max_price: int = Query(None, ge=0, description="Maximum price"),
+    db: Session = Depends(get_db)
+):
+    return crud.search_sweets(db, name, category, min_price, max_price)
