@@ -27,7 +27,7 @@ Frontend runs on: http://localhost:5173
 ## Installation
 
 ### 1. Clone the repository
-```bash
+
 git clone https://github.com/<your-username>/sweetshop.git
 cd sweetshop
 cd app
