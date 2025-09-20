@@ -1,3 +1,4 @@
+# app/models.py
 from sqlalchemy import Column, Integer, String, Boolean
 from .database import Base
 
@@ -19,3 +20,5 @@ class Sweet(Base):
     category = Column(String, index=True, nullable=True)
     price = Column(Integer, nullable=False)
     quantity = Column(Integer, default=0, nullable=False)
+    description = Column(String, default="", nullable=True)  # Added description
+    image = Column(String, default="", nullable=True)        # Added image URL
