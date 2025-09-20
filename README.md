@@ -33,6 +33,7 @@ cd sweetshop
 
 cd app
 python -m venv venv
+```
 # Windows
 venv\Scripts\activate
 # Linux/Mac
@@ -48,7 +49,7 @@ Usage
 Open the frontend URL in your browser.
 Browse sweets, search, and add them to the cart.
 Admin can manage sweets via backend APIs.
-
+```bash
 sweetshop/
 ├─ app/                  # Backend
 │  ├─ main.py
@@ -62,7 +63,7 @@ sweetshop/
 │  └─ vite.config.js
 ├─ requirements.txt      # Backend dependencies
 └─ README.md
-
+```
 Dependencies
 Backend (Python)
 fastapi
