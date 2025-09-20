@@ -21,15 +21,16 @@ Users can browse sweets, add them to a cart, and simulate purchases, while the a
 - **Frontend:** Vue.js, Vite, Tailwind CSS, Axios  
 - **Authentication:** JWT token-based authentication (optional)  
 - **Version Control:** Git & GitHub  
-Frontend runs on: http://localhost:5173
+
 ---
 
 ## Installation
 
 ### 1. Clone the repository
-
+```bash
 git clone https://github.com/<your-username>/sweetshop.git
 cd sweetshop
+
 cd app
 python -m venv venv
 # Windows
@@ -38,10 +39,12 @@ venv\Scripts\activate
 # source venv/bin/activate
 pip install -r requirements.txt
 uvicorn main:app --reload
-Backend runs on: http://127.0.0.1:8000
 
-Usage:
+cd ../frontend-vue
+npm install
+npm run dev
 
+Usage
 Open the frontend URL in your browser.
 Browse sweets, search, and add them to the cart.
 Admin can manage sweets via backend APIs.
@@ -60,6 +63,21 @@ sweetshop/
 ├─ requirements.txt      # Backend dependencies
 └─ README.md
 
+Dependencies
+Backend (Python)
+fastapi
+uvicorn
+sqlalchemy
+passlib[bcrypt]
+python-jose[cryptography]
+pytest
+
+Frontend (Node)
+vue
+vite
+tailwindcss
+axios
+
 Contributing
 
 Fork the repository
@@ -68,5 +86,5 @@ Commit your changes (git commit -m 'feat: description')
 Push to branch (git push origin feature-name)
 Open a Pull Request
 
+License
 This project is licensed under the MIT License.
-
